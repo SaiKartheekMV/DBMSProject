@@ -1,14 +1,228 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
+}
+
+model adminlogs {
+  log_id    Int       @id @default(autoincrement())
+  admin_id  Int
+  action    String    @db.Text
+  timestamp DateTime? @default(now()) @db.Timestamp(0)
+  users     users     @relation(fields: [admin_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "adminlogs_ibfk_1")
+
+  @@index([admin_id], map: "admin_id")
+}
+
+model disasters {
+  disaster_id Int                @id @default(autoincrement())
+  title       String             @db.VarChar(150)
+  type        disasters_type
+  description String?            @db.Text
+  location    String             @db.VarChar(255)
+  severity    disasters_severity
+  reported_by Int?
+  images      String?            @db.Text
+  timestamp   DateTime?          @default(now()) @db.Timestamp(0)
+  status      disasters_status?  @default(active)
+  users       users?             @relation(fields: [reported_by], references: [user_id], onUpdate: NoAction, map: "disasters_ibfk_1")
+  requests    requests[]
+  tasks       tasks[]
+
+  @@index([reported_by], map: "reported_by")
+}
+
+model donations {
+  donation_id                         Int                     @id @default(autoincrement())
+  user_id                             Int
+  resource_type                       donations_resource_type
+  quantity                            Int
+  status                              donations_status?       @default(pending)
+  timestamp                           DateTime?               @default(now()) @db.Timestamp(0)
+  recipient_id                        Int?
+  users_donations_user_idTousers      users                   @relation("donations_user_idTousers", fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "donations_ibfk_1")
+  users_donations_recipient_idTousers users?                  @relation("donations_recipient_idTousers", fields: [recipient_id], references: [user_id], onUpdate: NoAction, map: "donations_ibfk_2")
+
+  @@index([recipient_id], map: "recipient_id")
+  @@index([user_id], map: "user_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model feedback {
+  feedback_id Int       @id @default(autoincrement())
+  user_id     Int
+  rating      Int?
+  comments    String?   @db.Text
+  timestamp   DateTime? @default(now()) @db.Timestamp(0)
+  users       users     @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "feedback_ibfk_1")
+
+  @@index([user_id], map: "user_id")
+}
+
+model requests {
+  request_id    Int                    @id @default(autoincrement())
+  user_id       Int
+  disaster_id   Int
+  resource_type requests_resource_type
+  quantity      Int
+  status        requests_status?       @default(pending)
+  timestamp     DateTime?              @default(now()) @db.Timestamp(0)
+  delivery_date DateTime?              @db.Date
+  users         users                  @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "requests_ibfk_1")
+  disasters     disasters              @relation(fields: [disaster_id], references: [disaster_id], onDelete: Cascade, onUpdate: NoAction, map: "requests_ibfk_2")
+  resources     resources[]
+
+  @@index([disaster_id], map: "disaster_id")
+  @@index([user_id], map: "user_id")
+}
+
+model resources {
+  resource_id        Int                     @id @default(autoincrement())
+  resource_type      resources_resource_type
+  quantity_available Int
+  source             String                  @db.VarChar(255)
+  allocated_to       Int?
+  status             resources_status?       @default(available)
+  expiry_date        DateTime?               @db.Date
+  requests           requests?               @relation(fields: [allocated_to], references: [request_id], onUpdate: NoAction, map: "resources_ibfk_1")
+
+  @@index([allocated_to], map: "allocated_to")
+}
+
+model tasks {
+  task_id          Int           @id @default(autoincrement())
+  disaster_id      Int
+  volunteer_id     Int
+  task_description String        @db.Text
+  status           tasks_status? @default(pending)
+  assigned_date    DateTime?     @default(now()) @db.Timestamp(0)
+  completed_date   DateTime?     @db.Timestamp(0)
+  disasters        disasters     @relation(fields: [disaster_id], references: [disaster_id], onDelete: Cascade, onUpdate: NoAction, map: "tasks_ibfk_1")
+  volunteers       volunteers    @relation(fields: [volunteer_id], references: [volunteer_id], onDelete: Cascade, onUpdate: NoAction, map: "tasks_ibfk_2")
+
+  @@index([disaster_id], map: "disaster_id")
+  @@index([volunteer_id], map: "volunteer_id")
+}
+
+model users {
+  user_id                                 Int         @id @default(autoincrement())
+  name                                    String      @db.VarChar(100)
+  email                                   String      @unique(map: "email") @db.VarChar(100)
+  phone                                   String      @unique(map: "phone") @db.VarChar(20)
+  role                                    users_role
+  address                                 String?     @db.Text
+  password_hash                           String      @db.VarChar(255)
+  profile_picture                         String?     @db.VarChar(255)
+  created_at                              DateTime?   @default(now()) @db.Timestamp(0)
+  updated_at                              DateTime?   @default(now()) @db.Timestamp(0)
+  adminlogs                               adminlogs[]
+  disasters                               disasters[]
+  donations_donations_user_idTousers      donations[] @relation("donations_user_idTousers")
+  donations_donations_recipient_idTousers donations[] @relation("donations_recipient_idTousers")
+  feedback                                feedback[]
+  requests                                requests[]
+  volunteers                              volunteers?
+}
+
+model volunteers {
+  volunteer_id Int                      @id @default(autoincrement())
+  user_id      Int                      @unique(map: "user_id")
+  skills       String                   @db.Text
+  availability volunteers_availability? @default(available)
+  location     String                   @db.VarChar(255)
+  status       volunteers_status?       @default(active)
+  tasks        tasks[]
+  users        users                    @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "volunteers_ibfk_1")
+}
+
+enum resources_resource_type {
+  food
+  water
+  shelter
+  medical
+  clothing
+  other
+}
+
+enum disasters_type {
+  earthquake
+  flood
+  wildfire
+  hurricane
+  other
+}
+
+enum donations_resource_type {
+  food
+  water
+  shelter
+  medical
+  clothing
+  other
+}
+
+enum requests_resource_type {
+  food
+  water
+  shelter
+  medical
+  clothing
+  other
+}
+
+enum volunteers_availability {
+  available
+  busy
+  unavailable
+}
+
+enum donations_status {
+  pending
+  accepted
+  rejected
+}
+
+enum tasks_status {
+  pending
+  in_progress @map("in progress")
+  completed
+}
+
+enum users_role {
+  admin
+  donor
+  requester
+  volunteer
+}
+
+enum disasters_severity {
+  low
+  medium
+  high
+  critical
+}
+
+enum volunteers_status {
+  active
+  inactive
+}
+
+enum requests_status {
+  pending
+  fulfilled
+  rejected
+}
+
+enum resources_status {
+  available
+  allocated
+  used
+}
+
+enum disasters_status {
+  active
+  resolved
 }
